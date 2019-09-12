@@ -1,0 +1,4 @@
+[submodule "RIOT"]
+	path = RIOT
+	url = https://github.com/haukepetersen/RIOT.git
+	branch = demo_acmicn_bleicngateway
