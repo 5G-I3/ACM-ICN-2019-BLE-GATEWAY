@@ -27,6 +27,9 @@
 #include "event/timeout.h"
 #include "nimble_riot.h"
 #include "net/bluetil/ad.h"
+#include "nimble_netif.h"
+#include "nimble_autoconn.h"
+#include "nimble_autoconn_params.h"
 
 #include "host/ble_hs.h"
 #include "host/ble_gatt.h"
@@ -90,7 +93,7 @@ static int _devinfo_handler(uint16_t conn_handle, uint16_t attr_handle,
 static int _bas_handler(uint16_t conn_handle, uint16_t attr_handle,
                         struct ble_gatt_access_ctxt *ctxt, void *arg);
 
-static void _start_advertising(void);
+// static void _start_advertising(void);
 static void _hrs_conn(uint8_t state);
 static void _ndn_conn(uint8_t state);
 
@@ -258,53 +261,68 @@ static int _bas_handler(uint16_t conn_handle, uint16_t attr_handle,
     return (res == 0) ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
 }
 
-static int gap_event_cb(struct ble_gap_event *event, void *arg)
+// static int _gap_event_cb(struct ble_gap_event *event, void *arg)
+// {
+//     (void)arg;
+
+//     switch (event->type) {
+//         case BLE_GAP_EVENT_CONNECT:
+//             if (event->connect.status) {
+//                 _hrs_conn(0);
+//                 _start_advertising();
+//                 return 0;
+//             }
+//             _conn_handle = event->connect.conn_handle;
+//             break;
+
+//         case BLE_GAP_EVENT_DISCONNECT:
+//             _hrs_conn(0);
+//             _start_advertising();
+//             break;
+
+//         case BLE_GAP_EVENT_SUBSCRIBE:
+//             if (event->subscribe.attr_handle == _hrs_val_handle) {
+//                 _hrs_conn(event->subscribe.cur_notify);
+//             }
+//             else if (event->subscribe.attr_handle == _ndn_val_handle) {
+//                 _ndn_conn(event->subscribe.cur_notify);
+//             }
+//             break;
+//     }
+
+//     return 0;
+// }
+
+static void _on_gap_passthrough(struct ble_gap_event *event)
 {
-    (void)arg;
-
-    switch (event->type) {
-        case BLE_GAP_EVENT_CONNECT:
-            if (event->connect.status) {
-                _hrs_conn(0);
-                _start_advertising();
-                return 0;
-            }
-            _conn_handle = event->connect.conn_handle;
-            break;
-
-        case BLE_GAP_EVENT_DISCONNECT:
-            _hrs_conn(0);
-            _start_advertising();
-            break;
-
-        case BLE_GAP_EVENT_SUBSCRIBE:
-            if (event->subscribe.attr_handle == _hrs_val_handle) {
-                _hrs_conn(event->subscribe.cur_notify);
-            }
-            else if (event->subscribe.attr_handle == _ndn_val_handle) {
-                _ndn_conn(event->subscribe.cur_notify == 1);
-            }
-            break;
+    if (event->type == BLE_GAP_EVENT_SUBSCRIBE) {
+        if (event->subscribe.attr_handle == _hrs_val_handle) {
+            _hrs_conn(event->subscribe.cur_notify);
+        }
+        else if (event->subscribe.attr_handle == _ndn_val_handle) {
+            _ndn_conn(event->subscribe.cur_notify);
+        }
     }
-
-    return 0;
+    else {
+        printf("[GAP_PASSTHROUGH] unknown event %i\n", (int)event->type);
+    }
 }
 
-static void _start_advertising(void)
-{
-    struct ble_gap_adv_params advp;
-    int res;
+// static void _start_advertising(void)
+// {
+//     struct ble_gap_adv_params advp;
+//     int res;
 
-    memset(&advp, 0, sizeof advp);
-    advp.conn_mode = BLE_GAP_CONN_MODE_UND;
-    advp.disc_mode = BLE_GAP_DISC_MODE_GEN;
-    advp.itvl_min  = BLE_GAP_ADV_FAST_INTERVAL1_MIN;
-    advp.itvl_max  = BLE_GAP_ADV_FAST_INTERVAL1_MAX;
-    res = ble_gap_adv_start(nimble_riot_own_addr_type, NULL, BLE_HS_FOREVER,
-                            &advp, gap_event_cb, NULL);
-    assert(res == 0);
-    (void)res;
-}
+//     memset(&advp, 0, sizeof advp);
+//     advp.conn_mode = BLE_GAP_CONN_MODE_UND;
+//     advp.disc_mode = BLE_GAP_DISC_MODE_GEN;
+//     advp.itvl_min  = BLE_GAP_ADV_FAST_INTERVAL1_MIN;
+//     advp.itvl_max  = BLE_GAP_ADV_FAST_INTERVAL1_MAX;
+//     res = ble_gap_adv_start(nimble_riot_own_addr_type, NULL, BLE_HS_FOREVER,
+//                             &advp, _gap_event_cb, NULL);
+//     assert(res == 0);
+//     (void)res;
+// }
 
 static void _ndn_conn(uint8_t state)
 {
@@ -394,20 +412,21 @@ int main(void)
     /* reload the GATT server to link our added services */
     ble_gatts_start();
 
+    /* setup NDN (CCN-lite) */
+    app_ndn_init();
+
+    /* tell nimble_netif that we want to know about subcribe events */
+    nimble_netif_gappassthrough(_on_gap_passthrough);
+
     /* configure and set the advertising data */
     uint8_t buf[BLE_HS_ADV_MAX_SZ];
     bluetil_ad_t ad;
     bluetil_ad_init_with_flags(&ad, buf, sizeof(buf), BLUETIL_AD_FLAGS_DEFAULT);
-    uint16_t hrs_uuid = BLE_GATT_SVC_HRS;
-    bluetil_ad_add(&ad, BLE_GAP_AD_UUID16_INCOMP, &hrs_uuid, sizeof(hrs_uuid));
+    uint16_t uuids[2] = { BLE_GATT_SVC_HRS, BLE_GATT_SVC_NDNSS };
+    bluetil_ad_add(&ad, BLE_GAP_AD_UUID16_INCOMP, &uuids, sizeof(uuids));
     bluetil_ad_add_name(&ad, _device_name);
-    ble_gap_adv_set_data(ad.buf, ad.pos);
-
-    /* setup NDN (CCN-lite) */
-    app_ndn_init();
-
     /* start to advertise this node */
-    _start_advertising();
+    nimble_autoconn_init(&nimble_autoconn_params, ad.buf, ad.pos);
 
     /* run the shell (for debugging purposes) */
     char line_buf[SHELL_DEFAULT_BUFSIZE];
