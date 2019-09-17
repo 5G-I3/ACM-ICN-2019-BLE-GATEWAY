@@ -12,7 +12,7 @@ USEMODULE += gnrc_netdev_default
 USEMODULE += auto_init_gnrc_netif
 
 # Include NimBLE
-USEMODULE += nimble_netif
+USEMODULE += nimble_autoconn_ndnsp
 USEMODULE += nimble_svc_gap
 USEMODULE += nimble_svc_gatt
 USEMODULE += bluetil_ad
@@ -30,5 +30,6 @@ CFLAGS += -DNEEDS_PACKET_CRAFTING
 # which is not needed in a production environment but helps in the
 # development process:
 DEVELHELP ?= 1
+CFLAGS += -DDEBUG_ASSERT_VERBOSE
 
 include $(RIOTBASE)/Makefile.include

@@ -13,7 +13,8 @@ USEMODULE += gnrc_netdev_default
 USEMODULE += auto_init_gnrc_netif
 
 # Include NimBLE
-USEMODULE += nimble_netif
+USEMODULE += nimble_autoconn_ndnsp
+USEMODULE += nimble_autoconn_autostart
 
 # Include and configure CCN-lite
 USEPKG += ccn-lite
