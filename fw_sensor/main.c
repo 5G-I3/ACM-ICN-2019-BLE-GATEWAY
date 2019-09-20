@@ -69,7 +69,7 @@ static void _cs_insert(struct ccnl_relay_s *relay, struct ccnl_prefix_s *prefix,
     assert(pkt != NULL);
     struct ccnl_content_s *c = ccnl_content_new(&pkt);
     assert(c != NULL);
-    c->flags |= CCNL_CONTENT_FLAGS_STATIC;
+    // c->flags |= CCNL_CONTENT_FLAGS_STATIC;
     if (ccnl_content_add2cache(relay, c) == NULL){
         ccnl_content_free(c);
     }
