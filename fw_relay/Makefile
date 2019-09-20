@@ -8,6 +8,8 @@ USEMODULE += shell
 USEMODULE += shell_commands
 USEMODULE += prng_xorshift
 
+USEMODULE += gnrc_pktdump
+
 # Include packages that pull up and auto-init the link layer
 USEMODULE += gnrc_netdev_default
 USEMODULE += auto_init_gnrc_netif

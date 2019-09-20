@@ -25,6 +25,9 @@
 #include "ccn-lite-riot.h"
 #include "net/gnrc/netif.h"
 
+// REMOVE
+#include "net/gnrc/pktdump.h"
+
 /* main thread's message queue */
 #define MAIN_QUEUE_SIZE     (8)
 static msg_t _main_msg_queue[MAIN_QUEUE_SIZE];
@@ -36,7 +39,6 @@ int main(void)
     puts("NDN-BLE-Demo: Relay Node");
 
     ccnl_core_init();
-
     ccnl_start();
 
     /* get the default interface */
@@ -49,6 +51,11 @@ int main(void)
         return -1;
     }
 
+    gnrc_netreg_entry_t dump = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL,
+                                                          gnrc_pktdump_pid);
+    gnrc_netreg_register(GNRC_NETTYPE_CCN_CHUNK, &dump);
+
+    /* run the shell */
     char line_buf[SHELL_DEFAULT_BUFSIZE];
     shell_run(NULL, line_buf, SHELL_DEFAULT_BUFSIZE);
     return 0;
