@@ -100,9 +100,9 @@ static int _on_interest(struct ccnl_relay_s *relay,
     return 0;
 }
 
-static void _insert_static_content(const char *name, const char *data)
+static void _insert_static_content(char *name, const char *data)
 {
-    struct ccnl_prefix_s *prefix = ccnl_URItoPrefix((char *)name,
+    struct ccnl_prefix_s *prefix = ccnl_URItoPrefix(name,
                                                     CCNL_SUITE_NDNTLV, NULL);
     _cs_insert(&ccnl_relay, prefix, (char *)data, strlen(data));
     ccnl_prefix_free(prefix);
@@ -117,8 +117,10 @@ int main(void)
     msg_init_queue(_main_msg_queue, MAIN_QUEUE_SIZE);
     ccnl_core_init();
     ccnl_start();
-    _insert_static_content("/hello", "World!");
-    _insert_static_content("/foo", "Bar!");
+    char hello[32] = "/hello";
+    _insert_static_content(hello, "World!");
+    char foo[32] = "/foo";
+    _insert_static_content(foo, "Bar!");
 
     /* initialize the first network interface for CCN-lite */
     gnrc_netif_t *netif = gnrc_netif_iter(NULL);
