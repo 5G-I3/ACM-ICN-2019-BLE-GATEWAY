@@ -17,6 +17,9 @@ USEMODULE += nimble_svc_gap
 USEMODULE += nimble_svc_gatt
 USEMODULE += bluetil_ad
 
+CFLAGS += -DAUTOCONN_SCAN_ONLY
+CFLAGS += -DNIMBLE_NETIF_MAX_CONN=2
+
 # Include and configure CCN-lite
 USEPKG += ccn-lite
 CFLAGS += -DUSE_LINKLAYER
