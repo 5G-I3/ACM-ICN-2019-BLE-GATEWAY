@@ -20,42 +20,75 @@
 
 #include <stdio.h>
 
+#include "ccnl-producer.h"
+
 #include "msg.h"
 #include "shell.h"
 #include "ccn-lite-riot.h"
 #include "net/gnrc/netif.h"
 #include "net/gnrc/pktdump.h"
 
+
+#define NAME_BUF_LEN        (128U)
+
 /* main thread's message queue */
 #define MAIN_QUEUE_SIZE     (8)
 static msg_t _main_msg_queue[MAIN_QUEUE_SIZE];
 
+/* some local buffers */
+static char _namebuf[NAME_BUF_LEN];
+
+static int _name_cpflat(char *buf, const struct ccnl_prefix_s *pfx)
+{
+    (void)buf;
+    (void)pfx;
+    return 0;
+}
+
+static int _on_interest(struct ccnl_relay_s *relay,
+                        struct ccnl_face_s *from,
+                        struct ccnl_pkt_s *pkt)
+{
+    (void)relay;
+    (void)from;
+
+    _name_cpflat(_namebuf, pkt->pfx);
+
+    struct ccnl_prefix_s *p = pkt->pfx;
+    printf("incoming INTEREST: ");
+    for (uint32_t pos = 0; pos < p->compcnt; pos++) {
+        _namebuf[0] = '/';
+        memcpy(_namebuf + 1, p->comp[pos], p->complen[pos]);
+        _namebuf[p->complen[pos] + 1] = '\0';
+        printf("%s", _namebuf);
+    }
+    puts("");
+
+
+
+    return 0;
+}
+
 int main(void)
 {
+    int res;
+    (void)res;
+    puts("NDN-BLE-Demo: Sensor Node");
+
     msg_init_queue(_main_msg_queue, MAIN_QUEUE_SIZE);
-
-    puts("NDN-BLE-Demo: Relay Node");
-
     ccnl_core_init();
-
     ccnl_start();
 
-    /* get the default interface */
-    gnrc_netif_t *netif;
+    /* initialize the first network interface for CCN-lite */
+    gnrc_netif_t *netif = gnrc_netif_iter(NULL);
+    assert(netif);
+    res = ccnl_open_netif(netif->pid, GNRC_NETTYPE_CCN);
+    assert(res >= 0);
 
-    /* set the relay's PID, configure the interface to use CCN nettype */
-    if (((netif = gnrc_netif_iter(NULL)) == NULL) ||
-        (ccnl_open_netif(netif->pid, GNRC_NETTYPE_CCN) < 0)) {
-        puts("Error registering at network interface!");
-        return -1;
-    }
+    /* we produce new heart-rate data on-the-fly */
+    ccnl_set_local_producer(_on_interest);
 
-#ifdef MODULE_NETIF
-    gnrc_netreg_entry_t dump = GNRC_NETREG_ENTRY_INIT_PID(GNRC_NETREG_DEMUX_CTX_ALL,
-                                                          gnrc_pktdump_pid);
-    gnrc_netreg_register(GNRC_NETTYPE_CCN_CHUNK, &dump);
-#endif
-
+    /* run the shell (for debugging purposes) */
     char line_buf[SHELL_DEFAULT_BUFSIZE];
     shell_run(NULL, line_buf, SHELL_DEFAULT_BUFSIZE);
     return 0;
