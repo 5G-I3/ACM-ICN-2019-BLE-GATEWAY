@@ -19,30 +19,67 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 
 #include "ccnl-producer.h"
 
 #include "msg.h"
 #include "shell.h"
+#include "assert.h"
+#include "random.h"
 #include "ccn-lite-riot.h"
 #include "net/gnrc/netif.h"
 #include "net/gnrc/pktdump.h"
 
 
-#define NAME_BUF_LEN        (128U)
+#define NAME_HRS            { "icn19", "watch", "hrs" }
+#define NAME_HRS_COMPCNT    (4U)
 
 /* main thread's message queue */
 #define MAIN_QUEUE_SIZE     (8)
 static msg_t _main_msg_queue[MAIN_QUEUE_SIZE];
 
 /* some local buffers */
-static char _namebuf[NAME_BUF_LEN];
+static const char *_name_hrs[] = NAME_HRS;
+static unsigned char _csbuf[CCNL_MAX_PACKET_SIZE];
 
-static int _name_cpflat(char *buf, const struct ccnl_prefix_s *pfx)
+
+static void _cs_insert(struct ccnl_relay_s *relay, struct ccnl_prefix_s *prefix,
+                       void *payload, size_t payload_len)
 {
-    (void)buf;
-    (void)pfx;
-    return 0;
+    int res;
+    (void)res;  /* in case we build without develhelp */
+
+    /* generate a NDN-TLV item */
+    size_t offs = sizeof(_csbuf);
+    size_t reslen = 0;
+    res = ccnl_ndntlv_prependContent(prefix, payload, payload_len,
+                                     NULL, NULL, &offs, _csbuf, &reslen);
+    assert(res == 0);
+
+    /* do strange CCN-lite things to add the content into the content store */
+    size_t len;
+    uint64_t type;
+    unsigned char *olddata = _csbuf + offs;
+    unsigned char *data = olddata;
+    res = ccnl_ndntlv_dehead(&data, &reslen, &type, &len);
+    assert((res == 0) && (type == NDN_TLV_Data));
+
+    struct ccnl_pkt_s *pkt = ccnl_ndntlv_bytes2pkt(type, olddata, &data, &reslen);
+    assert(pkt != NULL);
+    struct ccnl_content_s *c = ccnl_content_new(&pkt);
+    assert(c != NULL);
+    c->flags |= CCNL_CONTENT_FLAGS_STATIC;
+    if (ccnl_content_add2cache(relay, c) == NULL){
+        ccnl_content_free(c);
+    }
+}
+
+static void _heartbeat_into_cs(struct ccnl_relay_s *relay,
+                               struct ccnl_prefix_s *prefix)
+{
+    uint16_t bpm = (uint16_t)random_uint32_range(80, 120);
+    _cs_insert(relay, prefix, &bpm, 2);
 }
 
 static int _on_interest(struct ccnl_relay_s *relay,
@@ -51,22 +88,24 @@ static int _on_interest(struct ccnl_relay_s *relay,
 {
     (void)relay;
     (void)from;
-
-    _name_cpflat(_namebuf, pkt->pfx);
-
     struct ccnl_prefix_s *p = pkt->pfx;
-    printf("incoming INTEREST: ");
-    for (uint32_t pos = 0; pos < p->compcnt; pos++) {
-        _namebuf[0] = '/';
-        memcpy(_namebuf + 1, p->comp[pos], p->complen[pos]);
-        _namebuf[p->complen[pos] + 1] = '\0';
-        printf("%s", _namebuf);
+
+    if (p->compcnt == NAME_HRS_COMPCNT &&
+        memcmp(p->comp[0], _name_hrs[0], p->complen[0]) == 0 &&
+        memcmp(p->comp[1], _name_hrs[1], p->complen[1]) == 0 &&
+        memcmp(p->comp[2], _name_hrs[2], p->complen[2]) == 0) {
+        _heartbeat_into_cs(relay, p);
     }
-    puts("");
-
-
 
     return 0;
+}
+
+static void _insert_static_content(const char *name, const char *data)
+{
+    struct ccnl_prefix_s *prefix = ccnl_URItoPrefix((char *)name,
+                                                    CCNL_SUITE_NDNTLV, NULL);
+    _cs_insert(&ccnl_relay, prefix, (char *)data, strlen(data));
+    ccnl_prefix_free(prefix);
 }
 
 int main(void)
@@ -78,6 +117,8 @@ int main(void)
     msg_init_queue(_main_msg_queue, MAIN_QUEUE_SIZE);
     ccnl_core_init();
     ccnl_start();
+    _insert_static_content("/hello", "World!");
+    _insert_static_content("/foo", "Bar!");
 
     /* initialize the first network interface for CCN-lite */
     gnrc_netif_t *netif = gnrc_netif_iter(NULL);
