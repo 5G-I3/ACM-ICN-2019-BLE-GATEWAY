@@ -94,7 +94,7 @@ static int _on_interest(struct ccnl_relay_s *relay,
         memcmp(p->comp[0], _name_hrs[0], p->complen[0]) == 0 &&
         memcmp(p->comp[1], _name_hrs[1], p->complen[1]) == 0 &&
         memcmp(p->comp[2], _name_hrs[2], p->complen[2]) == 0) {
-        puts("[sensor] got interest for /acm19/watch/hrs/x");
+        puts("[sensor] got interest for /icn19/watch/hrs/x");
         _heartbeat_into_cs(relay, p);
     }
 
