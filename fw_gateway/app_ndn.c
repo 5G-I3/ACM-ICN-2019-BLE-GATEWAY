@@ -1,6 +1,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "app.h"
 #include "fmt.h"
@@ -56,9 +57,11 @@ int app_ndn_send_interest(const char *name)
 {
     struct ccnl_prefix_s *prefix;
     int res;
+    char tmp[64];
+    memcpy(tmp, name, strlen(name));
 
     memset(_scratchpad, 0, sizeof(_scratchpad));
-    prefix = ccnl_URItoPrefix((char *)name, CCNL_SUITE_NDNTLV, NULL);
+    prefix = ccnl_URItoPrefix(tmp, CCNL_SUITE_NDNTLV, NULL);
     res = ccnl_send_interest(prefix, _scratchpad, sizeof(_scratchpad), NULL);
     ccnl_prefix_free(prefix);
 

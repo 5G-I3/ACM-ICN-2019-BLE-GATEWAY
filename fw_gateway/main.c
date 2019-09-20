@@ -50,9 +50,7 @@
 #define NSTATE_NDN              (0x0002)
 
 #define HRS_NAME_BUFSIZE        (32U)
-#define HRS_NAME_BASE           "/demo/hrs/"
-#define HRS_NAME_ID_POS         (10U)
-
+#define HRS_NAME_BASE           "/acm19/watch/hrs/"
 
 static const ble_uuid128_t _uuid_ndn_svc = BLE_UUID128_INIT(
                                 0x94, 0xc0, 0x8e, 0x7a, 0x9c, 0xa0, 0x45, 0x38,
@@ -79,6 +77,7 @@ static uint16_t _hrs_val_handle;
 static uint16_t _noti_state;
 
 static char _hrs_name[HRS_NAME_BUFSIZE];
+static const char *_hrs_name_base = HRS_NAME_BASE;
 static uint32_t _hrs_chunk_id = 0;
 
 static int _ndn_handler(uint16_t conn_handle, uint16_t attr_handle,
@@ -273,14 +272,12 @@ static int _gap_event_cb(struct ble_gap_event *event, void *arg)
                 _start_advertising();
                 return 0;
             }
-            nimble_autoconn_enable();
             _conn_handle = event->connect.conn_handle;
             break;
 
         case BLE_GAP_EVENT_DISCONNECT:
             puts("main: GAP_DISCONNECT");
             _hrs_conn(0);
-            nimble_autoconn_disable();
             _start_advertising();
             break;
 
@@ -362,12 +359,15 @@ static void _hrs_conn(uint8_t state)
 static void _hrs_update_trigger(struct ble_npl_event *ev)
 {
     (void)ev;
-    size_t pos = HRS_NAME_ID_POS;
 
     printf("[NOTIFY_HRS] sending interest\n");
     _hrs_chunk_id++;
+
+    size_t pos = strlen(_hrs_name_base);
+    memcpy(_hrs_name, _hrs_name_base, pos);
     pos += fmt_u32_dec((_hrs_name + pos), _hrs_chunk_id);
     _hrs_name[pos] = '\0';
+    printf("interest to name: %s\n", _hrs_name);
     app_ndn_send_interest(_hrs_name);
 
     /* schedule next update event */
@@ -436,6 +436,7 @@ int main(void)
     // bluetil_ad_add_name(&ad, _device_name);
     /* start to advertise this node */
     nimble_autoconn_init(&nimble_autoconn_params, NULL, 0);
+    nimble_autoconn_enable();
 
     /* configure and set the advertising data */
     uint8_t buf[BLE_HS_ADV_MAX_SZ];
