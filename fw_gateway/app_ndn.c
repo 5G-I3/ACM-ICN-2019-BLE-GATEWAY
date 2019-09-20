@@ -30,17 +30,25 @@ static void *_on_data(void *arg)
         msg_receive(&msg);
 
         if (msg.type == GNRC_NETAPI_MSG_TYPE_RCV) {
-            puts("RECREIVE NDN data");
-            puts("DO something");
             gnrc_pktsnip_t *snip = msg.content.ptr;
             assert(snip);
             if (snip->type != GNRC_NETTYPE_CCN_CHUNK) {
                 puts("[NDN] received invalid snip");
             }
             else {
-                uint32_t bpm = scn_u32_dec(snip->data, snip->size);
-                printf("[NDN] received Content, value is %i\n", (int)bpm);
-                app_hrs_update((uint16_t)bpm);
+                printf("[NDN] received Content (size %i)\n", (int)snip->size);
+                uint8_t *data = (uint8_t *)snip->data;
+                for (size_t i = 0; i < snip->size; i++) {
+                    printf("%i ", (int)data[i]);
+                }
+                puts(" END");
+                if (snip->size == 2) {
+                    app_hrs_update((uint16_t)data[0]);
+                }
+                else {
+                    /* this content belongs to some other interest... */
+                    app_ndn_update((const char *)snip->data, snip->size);
+                }
             }
         }
         /* we ignore everything else */

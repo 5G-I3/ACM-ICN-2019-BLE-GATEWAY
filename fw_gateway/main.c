@@ -50,7 +50,7 @@
 #define NSTATE_NDN              (0x0002)
 
 #define HRS_NAME_BUFSIZE        (32U)
-#define HRS_NAME_BASE           "/acm19/watch/hrs/"
+#define HRS_NAME_BASE           "/icn19/watch/hrs/"
 
 static const ble_uuid128_t _uuid_ndn_svc = BLE_UUID128_INIT(
                                 0x94, 0xc0, 0x8e, 0x7a, 0x9c, 0xa0, 0x45, 0x38,
@@ -79,6 +79,7 @@ static uint16_t _noti_state;
 static char _hrs_name[HRS_NAME_BUFSIZE];
 static const char *_hrs_name_base = HRS_NAME_BASE;
 static uint32_t _hrs_chunk_id = 0;
+static char _namebuf[HRS_NAME_BUFSIZE];
 
 static int _ndn_handler(uint16_t conn_handle, uint16_t attr_handle,
                         struct ble_gatt_access_ctxt *ctxt, void *arg);
@@ -180,12 +181,23 @@ static int _ndn_handler(uint16_t conn_handle, uint16_t attr_handle,
     (void)attr_handle;
     (void)arg;
 
-    printf("NDN handler triggered\n");
     if (ctxt->op == BLE_GATT_ACCESS_OP_WRITE_CHR) {
-        puts("WRITE CHR");
-    }
-    else if (ctxt->op == BLE_GATT_ACCESS_OP_WRITE_DSC) {
-        puts("WRITE desc");
+        uint16_t om_len = OS_MBUF_PKTLEN(ctxt->om);
+
+        if (om_len > sizeof(_namebuf)) {
+            return BLE_ATT_ERR_UNLIKELY;    /* probably not ideal return code */
+        }
+
+        /* read name from mbuf */
+        int res = ble_hs_mbuf_to_flat(ctxt->om, _namebuf,
+                                      (sizeof(_namebuf) - 1), &om_len);
+        assert(res == 0);
+        (void)res;
+        _namebuf[om_len] = '\0';
+
+        /* send out an interest using that name */
+        printf("[WRITE] send out interest for '%s'\n", _namebuf);
+        app_ndn_send_interest(_namebuf);
     }
 
     return 0;
@@ -266,7 +278,6 @@ static int _gap_event_cb(struct ble_gap_event *event, void *arg)
 
     switch (event->type) {
         case BLE_GAP_EVENT_CONNECT:
-            puts("main: GAP_CONNECT");
             if (event->connect.status) {
                 _hrs_conn(0);
                 _start_advertising();
@@ -276,13 +287,11 @@ static int _gap_event_cb(struct ble_gap_event *event, void *arg)
             break;
 
         case BLE_GAP_EVENT_DISCONNECT:
-            puts("main: GAP_DISCONNECT");
             _hrs_conn(0);
             _start_advertising();
             break;
 
         case BLE_GAP_EVENT_SUBSCRIBE:
-            puts("main: GAP_SUBSCRIBE");
             if (event->subscribe.attr_handle == _hrs_val_handle) {
                 _hrs_conn(event->subscribe.cur_notify);
             }
@@ -292,27 +301,11 @@ static int _gap_event_cb(struct ble_gap_event *event, void *arg)
             break;
 
         case BLE_GAP_EVENT_CONN_UPDATE:
-            puts("main: GAP_CONN_UPDAETE");
             break;
     }
 
     return 0;
 }
-
-// static void _on_gap_passthrough(struct ble_gap_event *event)
-// {
-//     if (event->type == BLE_GAP_EVENT_SUBSCRIBE) {
-//         if (event->subscribe.attr_handle == _hrs_val_handle) {
-//             _hrs_conn(event->subscribe.cur_notify);
-//         }
-//         else if (event->subscribe.attr_handle == _ndn_val_handle) {
-//             _ndn_conn(event->subscribe.cur_notify);
-//         }
-//     }
-//     else {
-//         printf("[GAP_PASSTHROUGH] unknown event %i\n", (int)event->type);
-//     }
-// }
 
 static void _start_advertising(void)
 {
@@ -398,6 +391,26 @@ void app_hrs_update(uint16_t bpm)
     assert(res == 0);
 }
 
+void app_ndn_update(const char *data, size_t len)
+{
+    printf("[NOTIFY_NDN] got new data (len: %i)\n", (int)len);
+
+    struct os_mbuf *om;
+    int res;
+    (void)res;
+
+    /* make sure NDN notifications are active */
+    if (!(_noti_state & NSTATE_NDN)) {
+        return;
+    }
+
+    /* put data into mbuf and let NimBLE take care of it */
+    om = ble_hs_mbuf_from_flat(data, len);
+    assert(om);
+    res = ble_gattc_notify_custom(_conn_handle, _ndn_val_handle, om);
+    assert(res == 0);
+}
+
 int main(void)
 {
     puts("Demo: NDN-BLE-Gateway");
@@ -424,17 +437,7 @@ int main(void)
     /* setup NDN (CCN-lite) */
     app_ndn_init();
 
-    /* tell nimble_netif that we want to know about subcribe events */
-    // nimble_netif_gappassthrough(_on_gap_passthrough);
-
-    /* configure and set the advertising data */
-    // uint8_t buf[BLE_HS_ADV_MAX_SZ];
-    // bluetil_ad_t ad;
-    // bluetil_ad_init_with_flags(&ad, buf, sizeof(buf), BLUETIL_AD_FLAGS_DEFAULT);
-    // uint16_t uuids[2] = { BLE_GATT_SVC_HRS, BLE_GATT_SVC_NDNSS };
-    // bluetil_ad_add(&ad, BLE_GAP_AD_UUID16_INCOMP, &uuids, sizeof(uuids));
-    // bluetil_ad_add_name(&ad, _device_name);
-    /* start to advertise this node */
+    /* run autoconn */
     nimble_autoconn_init(&nimble_autoconn_params, NULL, 0);
     nimble_autoconn_enable();
 
