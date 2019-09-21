@@ -31,6 +31,10 @@
 #include "net/gnrc/netif.h"
 #include "net/gnrc/pktdump.h"
 
+#ifdef BOARD_CK12
+#include "board.h"
+#define VIB_DURATION        (50U)
+#endif
 
 #define NAME_HRS            { "icn19", "watch", "hrs" }
 #define NAME_HRS_COMPCNT    (4U)
@@ -95,6 +99,9 @@ static int _on_interest(struct ccnl_relay_s *relay,
         memcmp(p->comp[1], _name_hrs[1], p->complen[1]) == 0 &&
         memcmp(p->comp[2], _name_hrs[2], p->complen[2]) == 0) {
         puts("[sensor] got interest for /icn19/watch/hrs/x");
+#ifdef BOARD_CK12
+        board_vibrate(VIB_DURATION);
+#endif
         _heartbeat_into_cs(relay, p);
     }
 
