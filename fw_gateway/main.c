@@ -41,7 +41,7 @@
 
 #define HRS_FLAGS_DEFAULT       (0x01)      /* 16-bit BPM value */
 #define SENSOR_LOCATION         (0x02)      /* wrist sensor */
-#define UPDATE_INTERVAL         (500U)      /* in ms */
+#define UPDATE_INTERVAL         (1000U)      /* in ms */
 #define BPM_MIN                 (80U)
 #define BPM_MAX                 (210U)
 #define BPM_STEP                (2)
@@ -184,11 +184,12 @@ static int _ndn_handler(uint16_t conn_handle, uint16_t attr_handle,
     if (ctxt->op == BLE_GATT_ACCESS_OP_WRITE_CHR) {
         uint16_t om_len = OS_MBUF_PKTLEN(ctxt->om);
 
-        if (om_len > sizeof(_namebuf)) {
+        if (om_len >= sizeof(_namebuf)) {
             return BLE_ATT_ERR_UNLIKELY;    /* probably not ideal return code */
         }
 
         /* read name from mbuf */
+        memset(_namebuf, 0, sizeof(_namebuf));
         int res = ble_hs_mbuf_to_flat(ctxt->om, _namebuf,
                                       (sizeof(_namebuf) - 1), &om_len);
         assert(res == 0);
@@ -279,7 +280,6 @@ static int _gap_event_cb(struct ble_gap_event *event, void *arg)
     switch (event->type) {
         case BLE_GAP_EVENT_CONNECT:
             if (event->connect.status) {
-                _hrs_conn(0);
                 _start_advertising();
                 return 0;
             }
@@ -287,7 +287,6 @@ static int _gap_event_cb(struct ble_gap_event *event, void *arg)
             break;
 
         case BLE_GAP_EVENT_DISCONNECT:
-            _hrs_conn(0);
             _start_advertising();
             break;
 

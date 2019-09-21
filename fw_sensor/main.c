@@ -47,9 +47,11 @@ static msg_t _main_msg_queue[MAIN_QUEUE_SIZE];
 static const char *_name_hrs[] = NAME_HRS;
 static unsigned char _csbuf[CCNL_MAX_PACKET_SIZE];
 
+static char _hello[32] = "/hello";
+static char _foo[32] = "/foo";
 
 static void _cs_insert(struct ccnl_relay_s *relay, struct ccnl_prefix_s *prefix,
-                       void *payload, size_t payload_len)
+                       void *payload, size_t payload_len, int persist)
 {
     int res;
     (void)res;  /* in case we build without develhelp */
@@ -73,7 +75,9 @@ static void _cs_insert(struct ccnl_relay_s *relay, struct ccnl_prefix_s *prefix,
     assert(pkt != NULL);
     struct ccnl_content_s *c = ccnl_content_new(&pkt);
     assert(c != NULL);
-    // c->flags |= CCNL_CONTENT_FLAGS_STATIC;
+    if (persist) {
+        c->flags |= CCNL_CONTENT_FLAGS_STATIC;
+    }
     if (ccnl_content_add2cache(relay, c) == NULL){
         ccnl_content_free(c);
     }
@@ -83,7 +87,15 @@ static void _heartbeat_into_cs(struct ccnl_relay_s *relay,
                                struct ccnl_prefix_s *prefix)
 {
     uint16_t bpm = (uint16_t)random_uint32_range(80, 120);
-    _cs_insert(relay, prefix, &bpm, 2);
+    _cs_insert(relay, prefix, &bpm, 2, 0);
+}
+
+static void _insert_static_content(char *name, const char *data)
+{
+    struct ccnl_prefix_s *prefix = ccnl_URItoPrefix(name,
+                                                    CCNL_SUITE_NDNTLV, NULL);
+    _cs_insert(&ccnl_relay, prefix, (char *)data, strlen(data), 1);
+    ccnl_prefix_free(prefix);
 }
 
 static int _on_interest(struct ccnl_relay_s *relay,
@@ -104,16 +116,17 @@ static int _on_interest(struct ccnl_relay_s *relay,
 #endif
         _heartbeat_into_cs(relay, p);
     }
+    /* dirty hack to 'keep' /foo and /bar in the content store */
+    else if (p->compcnt == 1 &&
+             memcmp(p->comp[0], "foo", p->complen[0]) == 0) {
+        _insert_static_content(_foo, "Bar!");
+    }
+    else if (p->compcnt == 1 &&
+             memcmp(p->comp[0], "hello", p->complen[0]) == 0) {
+        _insert_static_content(_hello, "World!");
+    }
 
     return 0;
-}
-
-static void _insert_static_content(char *name, const char *data)
-{
-    struct ccnl_prefix_s *prefix = ccnl_URItoPrefix(name,
-                                                    CCNL_SUITE_NDNTLV, NULL);
-    _cs_insert(&ccnl_relay, prefix, (char *)data, strlen(data));
-    ccnl_prefix_free(prefix);
 }
 
 int main(void)
@@ -125,10 +138,6 @@ int main(void)
     msg_init_queue(_main_msg_queue, MAIN_QUEUE_SIZE);
     ccnl_core_init();
     ccnl_start();
-    char hello[32] = "/hello";
-    _insert_static_content(hello, "World!");
-    char foo[32] = "/foo";
-    _insert_static_content(foo, "Bar!");
 
     /* initialize the first network interface for CCN-lite */
     gnrc_netif_t *netif = gnrc_netif_iter(NULL);

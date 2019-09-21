@@ -6,6 +6,7 @@
 #include "app.h"
 #include "fmt.h"
 #include "assert.h"
+#include "net/gnrc/pktbuf.h"
 #include "net/gnrc/netif.h"
 #include "ccn-lite-riot.h"
 
@@ -38,10 +39,6 @@ static void *_on_data(void *arg)
             else {
                 printf("[NDN] received Content (size %i)\n", (int)snip->size);
                 uint8_t *data = (uint8_t *)snip->data;
-                for (size_t i = 0; i < snip->size; i++) {
-                    printf("%i ", (int)data[i]);
-                }
-                puts(" END");
                 if (snip->size == 2) {
                     app_hrs_update((uint16_t)data[0]);
                 }
@@ -50,6 +47,7 @@ static void *_on_data(void *arg)
                     app_ndn_update((const char *)snip->data, snip->size);
                 }
             }
+            gnrc_pktbuf_release(snip);
         }
         /* we ignore everything else */
         else {
@@ -66,7 +64,7 @@ int app_ndn_send_interest(const char *name)
     struct ccnl_prefix_s *prefix;
     int res;
     char tmp[64];
-    memcpy(tmp, name, strlen(name));
+    memcpy(tmp, name, strlen(name) + 1);
 
     memset(_scratchpad, 0, sizeof(_scratchpad));
     prefix = ccnl_URItoPrefix(tmp, CCNL_SUITE_NDNTLV, NULL);
