@@ -16,6 +16,7 @@ USEMODULE += nimble_autoconn_ndnsp
 USEMODULE += nimble_svc_gap
 USEMODULE += nimble_svc_gatt
 USEMODULE += bluetil_ad
+USEMODULE += bluetil_addr
 
 CFLAGS += -DAUTOCONN_SCAN_ONLY
 CFLAGS += -DNIMBLE_NETIF_MAX_CONN=2

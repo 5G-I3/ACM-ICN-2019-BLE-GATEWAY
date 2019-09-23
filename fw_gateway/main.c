@@ -27,6 +27,7 @@
 #include "event/timeout.h"
 #include "nimble_riot.h"
 #include "net/bluetil/ad.h"
+#include "net/bluetil/addr.h"
 #include "nimble_netif.h"
 #include "nimble_autoconn.h"
 #include "nimble_autoconn_params.h"
@@ -410,6 +411,48 @@ void app_ndn_update(const char *data, size_t len)
     assert(res == 0);
 }
 
+
+
+static int _cmd_autoconn_wl(int argc, char **argv)
+{
+    if (argc < 2) {
+        printf("usage: %s <addr>\n", argv[0]);
+    }
+
+    /* parse the address */
+    char *addr_str = argv[1];
+    uint8_t addr[BLE_ADDR_LEN];
+    if ((strlen(addr_str) != 17) ||
+        (addr_str[2] != ':') ||
+        (addr_str[5] != ':') ||
+        (addr_str[8] != ':') ||
+        (addr_str[11] != ':') ||
+        (addr_str[14] != ':')) {
+        puts("err: addr format error");
+        return 1;
+    }
+    for (unsigned i = 0; i < BLE_ADDR_LEN; i++) {
+        addr[i] = fmt_hex_byte(&addr_str[i * 3]);
+    }
+    /* test output parsed address */
+    printf("whitelisting ");
+    bluetil_addr_print(addr);
+    puts(" now");
+
+    int res = nimble_autoconn_wl_add(addr);
+    if (res != NIMBLE_AUTOCONN_OK) {
+        puts("err: unable to add address to whitelist");
+        return 1;
+    }
+
+    return 0;
+}
+
+static const shell_command_t _cmds[] = {
+    { "wl", "while list BLE addresses", _cmd_autoconn_wl },
+    { NULL, NULL, NULL }
+};
+
 int main(void)
 {
     puts("Demo: NDN-BLE-Gateway");
@@ -452,7 +495,7 @@ int main(void)
 
     /* run the shell (for debugging purposes) */
     char line_buf[SHELL_DEFAULT_BUFSIZE];
-    shell_run(NULL, line_buf, SHELL_DEFAULT_BUFSIZE);
+    shell_run(_cmds, line_buf, SHELL_DEFAULT_BUFSIZE);
 
     return 0;
 }
