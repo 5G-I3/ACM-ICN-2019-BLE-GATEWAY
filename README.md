@@ -1,5 +1,5 @@
 # ACM-ICN-2019-BLE-GATEWAY
-Code and documentation to reproduce the demo "NDN meets BLE: A Transparent Gateway for Opening NDN-over-BLE Networks to your Smart phone" published in Proc. of ACM ICN 2019
+Code and documentation to reproduce the demo "[NDN meets BLE: A Transparent Gateway for Opening NDN-over-BLE Networks to your Smart phone](https://conferences.sigcomm.org/acm-icn/2019/proceedings/icn19-35.pdf)" published in [Proc. of ACM ICN 2019](https://doi.org/10.1145/3357150.3357411)
 
 ## Components
 - Smart Watch CK12 (sensor)
